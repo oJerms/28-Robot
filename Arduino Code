@@ -1,0 +1,137 @@
+// Pin Setup - Indicating what each arduino pin does 
+//(note, motor orientation required some motors to go backward for the robot to move forward)
+const int LeftMotorForward = 7;
+const int LeftMotorBackward = 6;
+const int RightMotorForward = 5;
+const int RightMotorBackward = 4;
+//Speed
+const int LeftMotorSpeed = 9;
+const int RightMotorSpeed = 10;
+//Sensor
+const int TRIG_PIN = A1;
+const int ECHO_PIN = A2;
+//Adding on/off switch
+const int SWITCH_PIN = 2;
+
+// Chosen settings
+const int OBSTACLE_DISTANCE = 30;
+const int MOTOR_SPEED = 100;
+const unsigned long START_DELAY = 5000;
+
+// state variables
+bool waitingToStart = false;
+bool motorsEnabled = false;
+bool lastSwitchState = false;
+unsigned long switchOnTime = 0;
+
+// setup
+void setup() {
+  Serial.begin(9600);
+
+  pinMode(LeftMotorForward, OUTPUT);
+  pinMode(LeftMotorBackward, OUTPUT);
+  pinMode(RightMotorForward, OUTPUT);
+  pinMode(RightMotorBackward, OUTPUT);
+
+  pinMode(LeftMotorSpeed, OUTPUT);
+  pinMode(RightMotorSpeed, OUTPUT);
+
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+
+  pinMode(SWITCH_PIN, INPUT);
+
+  moveStop();
+}
+
+// The Main Loop
+void loop() {
+
+  bool switchState = digitalRead(SWITCH_PIN);
+
+  // When switch turned on, add a 5 second delay (for safety reasons)
+  if (switchState && !lastSwitchState) {
+    switchOnTime = millis();
+    waitingToStart = true;
+    motorsEnabled = false;
+    moveStop();
+  }
+
+  // When switch is off, power off
+  if (!switchState) {
+    waitingToStart = false;
+    motorsEnabled = false;
+    moveStop();
+  }
+
+  // Handle 5-second startup delay
+  if (waitingToStart && switchState) {
+    if (millis() - switchOnTime >= START_DELAY) {
+      waitingToStart = false;
+      motorsEnabled = true;
+    } else {
+      moveStop();
+      lastSwitchState = switchState;
+      delay(50);
+      return;
+    }
+  }
+
+  // Normal operation of robot
+  if (motorsEnabled && switchState) {
+    int distance = readPing();
+
+    if (distance <= OBSTACLE_DISTANCE) {
+      moveStop();
+    } else {
+      moveDrive();  
+    }
+  } else {
+    moveStop();
+  }
+
+  lastSwitchState = switchState;
+  delay(50);
+}
+
+// Ultrasonic sensor
+int readPing() {
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+
+  long duration = pulseIn(ECHO_PIN, HIGH, 30000);
+
+  if (duration == 0) return 250;
+
+  return duration * 0.034 / 2;
+}
+
+// Motor controller
+
+// Stop motors
+void moveStop() {
+  analogWrite(LeftMotorSpeed, 0);
+  analogWrite(RightMotorSpeed, 0);
+
+  digitalWrite(LeftMotorForward, LOW);
+  digitalWrite(LeftMotorBackward, LOW);
+  digitalWrite(RightMotorForward, LOW);
+  digitalWrite(RightMotorBackward, LOW);
+}
+
+void moveDrive() {
+  analogWrite(LeftMotorSpeed, MOTOR_SPEED);
+  analogWrite(RightMotorSpeed, MOTOR_SPEED);
+
+  // Left motor backward
+  digitalWrite(LeftMotorForward, LOW);
+  digitalWrite(LeftMotorBackward, HIGH);
+
+  // Right motor forward
+  digitalWrite(RightMotorForward, HIGH);
+  digitalWrite(RightMotorBackward, LOW);
+}
